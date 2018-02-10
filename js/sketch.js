@@ -7,8 +7,19 @@ var oldSize = view.size; //
 var spotColor = new Color('black');
 var mousePos = view.center //
 var selected = false; // ?
-var rasters = [];
-
+var rasters = [ ];
+var images = [
+  "image1.jpg",
+  "image2.jpg",
+  "image3.jpg",
+  "image4.jpg",
+  "image5.jpg",
+  "image6.jpg",
+  "image7.jpg",
+  "image8.jpg",
+  "image9.jpg",
+  "image10.jpg"
+];
 
 onResize(); //calling this function before all the rest?
 
@@ -86,12 +97,6 @@ function generateBeeHivePoints(size, loose) { //sites = all points
 function createPath(points, center) {
   var path = new Path();
   if(!selected) { //fills shapes with color if not selected
-    rasters.push(new Raster("https://loremflickr.com/320/240"));
-    var group = new Group(path, rasters[rasters.length]);
-    group.clipped = true;
-
-    rasters.position = path.position;
-
     path.fillColor = spotColor;
   } else {
     path.fullySelected = selected; //selected means that paths will show
@@ -110,7 +115,16 @@ function createPath(points, center) {
   }
   path.scale(0.95);
   removeSmallBits(path);
+  clipRasters(path, center);
+
   return path;
+}
+
+function clipRasters(path, center) {
+  rasters.push(new Raster("./images/" + images[(rasters.length - 1) % (images.length - 1)]));
+  var group = new Group(path, rasters[rasters.length -1]);
+  group.clipped = true;
+  rasters[rasters.length - 1].position = center;
 }
 
 function onResize() {
