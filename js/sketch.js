@@ -1,13 +1,11 @@
-
-//Declaring all global variables!
+var start = true;
 var voronoi = new Voronoi();
-var sites = generateBeeHivePoints(view.size / 150, false); //generate points for beehive shape
-var bbox, diagram; //bounding boxes and diagram to render?
-var oldSize = view.size; //
-var spotColor = new Color('black');
-var mousePos = view.center //
-var selected = false; // ?
-var rasters = [ ];
+var bbox, diagram;
+var sites = generateSites(view.size / 150, false);
+var cells = [];
+var oldSize = view.size;
+var selected = false;
+var rasters, groups = [];
 var images = [
   "image1.jpg",
   "image2.jpg",
@@ -21,63 +19,78 @@ var images = [
   "image10.jpg"
 ];
 
-onResize(); //calling this function before all the rest?
+function Cell(points, center){
+  this.path = new Path();
+  this.points = points;
+  this.center = center;
 
-//the function to create something to happen when the mouse is clicked
-function onMouseDown(event) {
-  sites.push(event.point);
-  renderDiagram();
-}
+  this.image;
+  this.group;
 
-//the function to have something happen then the mouse moves
-function onMouseMove(event) {
-  mousePos = event.point; //mouse goes over a point
-  if(event.count === 0) //if mouse goes over a point, push the sites over to make room
-    sites.push(event.point);
-    sites[sites.length - 1] = event.point;
-    renderDiagram(); //rerender diagram
-}
+  this.createCell = function(){
+    this.path.fillColor = new Color('black');
+    this.path.closed = true;
 
-//the function rendering the shapes and is called repeatedly
-function renderDiagram() {
-  project.activeLayer.children = [];
-  var diagram = voronoi.compute(sites, bbox); //calling voronoi.js and rendering the entire page
-  if(diagram) {
-    for(var i = 0, l = sites.length; i < l; i++) {
-      var cell = diagram.cells[sites[i].voronoiId];
-      if(cell) {
-        var halfedges = cell.halfedges,
-          length = halfedges.length;
-        if(length > 2) {
-          var points = [];
-          for(var j = 0; j < length; j++) {
-            v = halfedges[j].getEndpoint();
-            points.push(new Point(v));
-          }
-          createPath(points, sites[i]);
-        }
+    for(var i = 0; i < this.points.length; i++) {
+      var point = this.points[i]; //point origin
+      var next = this.points[(i + 1) == this.points.length ? 0 : i + 1]; //future point
+      var vector = (next - point) / 2; //direction that next point is moving in slope!
+      this.path.add({
+        point: point + vector,
+        handleIn: -vector,
+        handleOut: vector
+      });
+    }
+    this.path.scale(0.95);
+    this.removeSmallBits();
+    this.bindImage();
+  }
+
+  this.updateCell = function(points){
+    this.points = points;
+    this.path = new Path();
+
+    this.path.fillColor = new Color('black');
+    this.path.closed = true;
+
+    for(var i = 0; i < this.points.length; i++) {
+      var point = this.points[i]; //point origin
+      var next = this.points[(i + 1) == this.points.length ? 0 : i + 1]; //future point
+      var vector = (next - point) / 2; //direction that next point is moving in slope!
+      this.path.add({
+        point: point + vector,
+        handleIn: -vector,
+        handleOut: vector
+      });
+    }
+    this.path.scale(0.95);
+    this.removeSmallBits();
+  }
+
+  this.bindImage = function(){
+    this.image = new Raster("./images/" + images[Math.floor(Math.random()*images.length)]);
+    // this.image = new Raster("./images/image1.jpg");
+    this.group = new Group(this.path, this.image);
+    this.group.clipped = true;
+    this.image.position = this.center;
+  }
+
+  this.removeSmallBits = function(){
+    var averageLength = this.path.length / this.path.segments.length;
+    var min = this.path.length / 50;
+    for(var i = this.path.segments.length - 1; i >= 0; i--) {
+      var segment = this.path.segments[i];
+      var cur = segment.point;
+      var nextSegment = segment.next;
+      var next = nextSegment.point + nextSegment.handleIn;
+      if(cur.getDistance(next) < min) {
+        segment.remove();
       }
     }
   }
 }
 
-// function to make shapes with smooth edges (not extreme!)
-function removeSmallBits(path) {
-  var averageLength = path.length / path.segments.length;
-  var min = path.length / 50;
-  for(var i = path.segments.length - 1; i >= 0; i--) {
-    var segment = path.segments[i];
-    var cur = segment.point;
-    var nextSegment = segment.next;
-    var next = nextSegment.point + nextSegment.handleIn;
-    if(cur.getDistance(next) < min) {
-      segment.remove();
-    }
-  }
-}
-
-// the function to determine and generate points
-function generateBeeHivePoints(size, loose) { //sites = all points
+function generateSites(size, loose) { //sites = all points
   var points = [];
   var col = view.size / size; //window size height + width
   for(var i = -1; i < size.width + 1; i++) {
@@ -93,39 +106,49 @@ function generateBeeHivePoints(size, loose) { //sites = all points
   return points;
 }
 
-//function to create paths between shapes (each new path assign new classname & set background img to any random img)
-function createPath(points, center) {
-  var path = new Path();
-  if(!selected) { //fills shapes with color if not selected
-    path.fillColor = spotColor;
-  } else {
-    path.fullySelected = selected; //selected means that paths will show
+function createDiagram() {
+  project.activeLayer.children = [];
+  var diagram = voronoi.compute(sites, bbox);
+  if(diagram) {
+    for(var i = 0, l = sites.length; i < l; i++) {
+      var cell = diagram.cells[sites[i].voronoiId]; //???
+      if(cell) {
+        var halfedges = cell.halfedges, length = halfedges.length;
+        if(length > 2) {
+          var points = [];
+          for(var j = 0; j < length; j++) {
+            v = halfedges[j].getEndpoint();
+            points.push(new Point(v));
+          }
+          cells[sites[i].voronoiId] = new Cell(points, sites[i]);
+          cells[sites[i].voronoiId].createCell();
+        }
+      }
+    }
   }
-  path.closed = true;
-
-  for(var i = 0; i < points.length; i++) {
-    var point = points[i]; //point origin
-    var next = points[(i + 1) == points.length ? 0 : i + 1]; //future point
-    var vector = (next - point) / 2; //direction that next point is moving in slope!
-    path.add({
-      point: point + vector,
-      handleIn: -vector,
-      handleOut: vector
-    });
-  }
-  path.scale(0.95);
-  removeSmallBits(path);
-  clipRasters(path, center);
-
-  return path;
 }
 
-function clipRasters(path, center) {
-  rasters.push(new Raster("./images/" + images[(rasters.length - 1) % (images.length - 1)]));
-  var group = new Group(path, rasters[rasters.length -1]);
-  group.clipped = true;
-  rasters[rasters.length - 1].position = center;
+function updateDiagram(){
+  project.activeLayer.children = [];
+  var diagram = voronoi.compute(sites, bbox);
+  if(diagram) {
+    for(var i = 0, l = sites.length; i < l; i++) {
+      var cell = diagram.cells[sites[i].voronoiId]; //???
+      if(cell) {
+        var halfedges = cell.halfedges, length = halfedges.length;
+        if(length > 2) {
+          var points = [];
+          for(var j = 0; j < length; j++) {
+            v = halfedges[j].getEndpoint();
+            points.push(new Point(v));
+          }
+          cells[sites[i].voronoiId].updateCell(points);
+        }
+      }
+    }
+  }
 }
+//------------------------------------------------------------------------------
 
 function onResize() {
   var margin = 20;
@@ -139,12 +162,32 @@ function onResize() {
     sites[i] = sites[i] * view.size / oldSize;
   }
   oldSize = view.size;
-  renderDiagram();
+  // if(start){
+    createDiagram();
+    // start = false;
+  // }else{
+  //   updateDiagram();
+  // }
+}
+
+//the function to create something to happen when the mouse is clicked
+function onMouseDown(event) {
+  sites.push(event.point);
+  createDiagram();
+}
+
+//the function to have something happen then the mouse moves
+function onMouseMove(event) {
+  mousePos = event.point; //mouse goes over a point
+  if(event.count === 0) //if mouse goes over a point, push the sites over to make room
+    sites.push(event.point);
+    sites[sites.length - 1] = event.point;
+    createDiagram(); //rerender diagram
 }
 
 function onKeyDown(event) {
   if(event.key == 'space') {
     selected = !selected;
-    renderDiagram();
+    createDiagram();
   }
 }
