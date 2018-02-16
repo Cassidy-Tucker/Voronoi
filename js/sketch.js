@@ -23,6 +23,7 @@ function Cell(points, center){
   this.path = new Path();
   this.points = points;
   this.center = center;
+  this.text;
 
   this.image;
   this.group;
@@ -43,7 +44,16 @@ function Cell(points, center){
     }
     this.path.scale(0.95);
     this.removeSmallBits();
-    this.bindImage();
+    this.text = new PointText(new Point(center));
+    this.text.fillColor = 'white';
+    this.text.content = "JEUX";
+    this.text.fontSize = (-1*this.path.area) / 1000;
+    this.text.justification = 'center';
+    this.text.skew(this.path.bounds.width* (Math.random() * 10), this.path.bounds.height* (Math.random() * 10));
+    // this.text.position.x -= this.text.length;
+
+    // this.text.skew(60);
+    //this.bindImage();
   }
 
   this.updateCell = function(points){
@@ -170,13 +180,11 @@ function onResize() {
   // }
 }
 
-//the function to create something to happen when the mouse is clicked
 function onMouseDown(event) {
   sites.push(event.point);
   createDiagram();
 }
 
-//the function to have something happen then the mouse moves
 function onMouseMove(event) {
   mousePos = event.point; //mouse goes over a point
   if(event.count === 0) //if mouse goes over a point, push the sites over to make room
